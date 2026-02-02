@@ -1,5 +1,5 @@
 import Foundation
 
-enum ServiceError: Error {
+public enum ServiceError: Error {
     case unknownURL, notAnHTTPResponse, ressourceDoesNotExists, serverIssue, emptyData, emptyURL, noPresignedURL
 }
