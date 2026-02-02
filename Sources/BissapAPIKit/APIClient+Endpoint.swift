@@ -2,7 +2,7 @@ import Foundation
 
 extension APIClient {
     /// Router describing an HTTP request.
-    enum Endpoint {
+    public enum Endpoint {
         case direct(
             url: URL,
             method: HTTPMethod,

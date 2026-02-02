@@ -2,7 +2,7 @@ import Foundation
 import UniformTypeIdentifiers
 import OSLog
 
-enum APIClient {
+public enum APIClient {
     /// Injectable session for tests / future SPM usage.
     static private let session: URLSession = .shared
 
@@ -16,7 +16,7 @@ enum APIClient {
     ///
     /// Usage:
     /// `let user: User = try await APIClient.request(endpoint, responseType: User.self, accessToken: token)`
-    static func request<T: Decodable>(
+    public static func request<T: Decodable>(
         _ endpoint: Endpoint,
         responseType: T.Type = T.self,
         accessToken: String? = nil
@@ -28,7 +28,7 @@ enum APIClient {
     }
 
     /// Request where you don't have a return value.
-    static func request(
+    public static func request(
         _ endpoint: Endpoint,
         accessToken: String? = nil
     ) async throws {
@@ -96,7 +96,7 @@ enum APIClient {
 }
 
 extension APIClient {
-    static func putToS3(
+    public static func putToS3(
         presignedURL: URL,
         data: Data,
         contentType: String? = nil,
