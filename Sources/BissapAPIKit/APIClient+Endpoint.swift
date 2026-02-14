@@ -1,8 +1,22 @@
 import Foundation
 
+/// Endpoint routing helpers for `APIClient`.
 extension APIClient {
-    /// Router describing an HTTP request.
+    /// Router describing a single HTTP request.
+    ///
+    /// This enum intentionally uses a single `.direct` case so callers provide
+    /// a full URL and avoid hidden base-URL behavior.
     public enum Endpoint {
+        /// Defines a request from a full URL, HTTP method, and optional payload.
+        ///
+        /// - Parameters:
+        ///   - url: Destination URL.
+        ///   - method: HTTP verb to use.
+        ///   - payload: Optional values used as query items for `GET` and JSON body for non-`GET`.
+        ///     `nil` values are dropped.
+        /// - Note:
+        ///   For `GET`, only `String`, `Int`, `Double`, and `Bool` payload values are converted
+        ///   into query items. Unsupported types are ignored for query encoding.
         case direct(
             url: URL,
             method: HTTPMethod,
@@ -30,7 +44,7 @@ extension APIClient {
             }
         }
 
-        /// URLComponents built from `url` and, for GET requests, the `payload` as query items.
+        /// Builds URL components from `url` and appends query items for GET payloads.
         var urlComponents: URLComponents {
             var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) ?? URLComponents()
 
@@ -47,12 +61,14 @@ extension APIClient {
             return comps
         }
 
-        /// Final URL after applying query items (GET only).
+        /// Final URL after applying computed query items.
         var resolvedURL: URL {
             urlComponents.url ?? url
         }
 
-        /// For non-GET requests, encodes payload into JSON data.
+        /// Encodes non-GET payload into JSON request body data.
+        ///
+        /// - Throws: Any `JSONSerialization` error when payload values are not JSON-compatible.
         var bodyData: Data? {
             get throws {
                 guard method != .get, let payload else { return nil }
@@ -63,6 +79,9 @@ extension APIClient {
         }
     }
 
+    /// Converts supported query value types to string form.
+    ///
+    /// Unsupported types return `nil` so they are omitted from the query string.
     private static func toQueryValue(_ any: Any?) -> String? {
         switch any {
         case let v as String: return v

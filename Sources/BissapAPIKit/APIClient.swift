@@ -1,21 +1,49 @@
 import Foundation
-import UniformTypeIdentifiers
 import OSLog
+import UniformTypeIdentifiers
 
+/// Networking namespace for API calls and presigned S3 uploads.
+///
+/// `APIClient` executes fully-defined `Endpoint` values and validates HTTP responses.
+/// It does not manage base URLs, retries, token refresh, or persistence.
 public enum APIClient {
-    /// Injectable session for tests / future SPM usage.
+    /// Shared URL session used by all requests.
+    ///
+    /// Kept internal so request behavior remains centralized.
     static private let session: URLSession = .shared
 
+    /// Shared JSON decoder for typed response decoding.
     private static let decoder = JSONDecoder()
 
+    /// Logger used to capture server-side failure context.
     private static let logger = Logger()
 
     // MARK: - Public
 
-    /// Request expecting a decodable JSON response.
+    /// Executes an HTTP request and decodes a JSON response.
     ///
-    /// Usage:
-    /// `let user: User = try await APIClient.request(endpoint, responseType: User.self, accessToken: token)`
+    /// - Parameters:
+    ///   - endpoint: Request definition containing URL, method, and optional payload.
+    ///   - responseType: Expected decodable model type. Defaults to `T.self`.
+    ///   - accessToken: Optional bearer token sent as `Authorization: Bearer <token>`.
+    /// - Returns: A decoded value of type `T`.
+    /// - Throws:
+    ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
+    ///   - `ServiceError.serverIssue` when status code is outside `200..<300`.
+    ///   - `ServiceError.emptyData` when the body is empty.
+    ///   - `DecodingError` when JSON shape does not match `T`.
+    ///   - `URLError` or other `URLSession` transport errors.
+    /// - Example:
+    ///   ```swift
+    ///   struct User: Decodable { let id: String }
+    ///
+    ///   let endpoint = APIClient.Endpoint.direct(
+    ///       url: URL(string: "https://example.com/users/me")!,
+    ///       method: .get
+    ///   )
+    ///
+    ///   let user: User = try await APIClient.request(endpoint)
+    ///   ```
     public static func request<T: Decodable>(
         _ endpoint: Endpoint,
         responseType: T.Type = T.self,
@@ -27,7 +55,15 @@ public enum APIClient {
         return try decoder.decode(T.self, from: validated)
     }
 
-    /// Request where you don't have a return value.
+    /// Executes an HTTP request where the caller does not need to decode a response body.
+    ///
+    /// - Parameters:
+    ///   - endpoint: Request definition containing URL, method, and optional payload.
+    ///   - accessToken: Optional bearer token sent as `Authorization: Bearer <token>`.
+    /// - Throws:
+    ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
+    ///   - `ServiceError.serverIssue` when status code is outside `200..<300`.
+    ///   - `URLError` or other `URLSession` transport errors.
     public static func request(
         _ endpoint: Endpoint,
         accessToken: String? = nil
@@ -39,6 +75,9 @@ public enum APIClient {
 
     // MARK: - Internals
 
+    /// Builds the final `URLRequest` from endpoint data and optional auth.
+    ///
+    /// - Note: For non-GET requests, payload is encoded as JSON by `Endpoint.bodyData`.
     private static func makeURLRequest(for endpoint: Endpoint, accessToken: String?) throws -> URLRequest {
         let finalURL = endpoint.resolvedURL
         let method = endpoint.method
@@ -62,6 +101,18 @@ public enum APIClient {
         return req
     }
 
+    /// Validates HTTP response status and body availability.
+    ///
+    /// - Parameters:
+    ///   - response: Raw `URLSession` response object.
+    ///   - data: Body bytes returned by the server.
+    ///   - allowEmptyBody: `true` when empty body is acceptable.
+    ///   - context: Optional label to enrich logs for debugging.
+    /// - Returns: The original response data when validation succeeds.
+    /// - Throws:
+    ///   - `ServiceError.notAnHTTPResponse` if response is not `HTTPURLResponse`.
+    ///   - `ServiceError.serverIssue` for any non-2xx status code.
+    ///   - `ServiceError.emptyData` when `allowEmptyBody` is `false` and body is empty.
     private static func validate(
         response: URLResponse,
         data: Data,
@@ -71,6 +122,7 @@ public enum APIClient {
         guard let http = response as? HTTPURLResponse else { throw ServiceError.notAnHTTPResponse }
         guard (200..<300).contains(http.statusCode) else {
             let errorText = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
+            // Keep server context in logs so callers can quickly diagnose request failures.
             logger.error(
             """
             HTTP error status=\(http.statusCode),
@@ -96,6 +148,19 @@ public enum APIClient {
 }
 
 extension APIClient {
+    /// Uploads raw bytes to a presigned S3 URL using HTTP `PUT`.
+    ///
+    /// - Parameters:
+    ///   - presignedURL: Fully signed URL returned by your backend/storage signer.
+    ///   - data: Raw file bytes to upload.
+    ///   - contentType: Optional explicit MIME type. When omitted, inferred from `filename` extension.
+    ///   - signedHeaders: Additional headers required by the presigned signature.
+    ///   - filename: Optional filename used to infer MIME type when `contentType` is absent.
+    /// - Throws:
+    ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
+    ///   - `ServiceError.serverIssue` when status code is outside `200..<300`.
+    ///   - `URLError` or other `URLSession` transport errors.
+    /// - Note: Upload uses raw bytes (`upload(for:from:)`), not multipart form data.
     public static func putToS3(
         presignedURL: URL,
         data: Data,
@@ -107,7 +172,10 @@ extension APIClient {
         var req = URLRequest(url: presignedURL)
         req.httpMethod = HTTPMethod.put.rawValue
 
-        // Resolve the correct MIME type: prefer explicit contentType; otherwise infer from filename; fallback to JPEG
+        // Resolve MIME type deterministically:
+        // 1) explicit contentType
+        // 2) inferred from filename extension
+        // 3) fallback to image/jpeg
         let resolvedMime: String = {
             if let ct = contentType, !ct.isEmpty { return ct }
             if let fn = filename,
@@ -116,19 +184,19 @@ extension APIClient {
             return "image/jpeg"
         }()
 
-        // Send raw bytes with the correct Content-Type (NOT multipart/form-data)
+        // Send raw bytes with the correct content metadata.
         req.setValue(resolvedMime, forHTTPHeaderField: "Content-Type")
-        // Helps browsers render instead of download by default
+        // Inline disposition helps browsers render supported file types directly.
         req.setValue("inline", forHTTPHeaderField: "Content-Disposition")
 
-        // Apply exactly the headers that were part of the signing, without overriding signed Content-Type/Disposition
+        // Preserve signing contract: pass through signed headers except fields controlled above.
         for (k, v) in signedHeaders {
             if k.caseInsensitiveCompare("Content-Type") == .orderedSame { continue }
             if k.caseInsensitiveCompare("Content-Disposition") == .orderedSame { continue }
             req.setValue(v, forHTTPHeaderField: k)
         }
 
-        // Optional but explicit: send known length
+        // Include size explicitly for services that validate Content-Length.
         req.setValue(String(data.count), forHTTPHeaderField: "Content-Length")
 
         let (body, resp) = try await session.upload(for: req, from: data)
