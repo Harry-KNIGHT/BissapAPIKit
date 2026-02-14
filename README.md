@@ -141,8 +141,17 @@ If your app uses Swift Package Manager, refresh dependencies in Xcode or run:
 swift package update
 ```
 
+## Swift 6.2 Migration Notes
+- Required toolchain: Swift 6.2 (validated with `swift --version` showing Apple Swift 6.2.3).
+- Xcode requirement: use an Xcode version that ships Swift 6.2.
+- Package language mode: Swift 6 mode is enabled in `Package.swift` (`swiftLanguageModes: [.v6]`).
+- Platform declarations: package now explicitly declares `.macOS(.v12)` in addition to `.iOS(.v15)` so async `URLSession` and `OSLog` APIs compile when building on macOS.
+- Public API impact: none.
+- Runtime behavior impact: none; migration changes are package/tooling configuration plus a smoke test target.
+
 ## Assumptions
 - Your app targets iOS 15+ (this package declares iOS 15 in `Package.swift`).
+- Your development machine is macOS 12+ if building this package directly on macOS.
 - You are using Swift Package Manager.
 - The demo endpoint `https://jsonplaceholder.typicode.com/todos/1` is reachable from your network.
 

@@ -182,6 +182,7 @@ public enum ServiceError: Error {
     case ressourceDoesNotExists
     case serverIssue
     case emptyData
+    case emptyURL
     case noPresignedURL
 }
 ```
@@ -231,11 +232,13 @@ Errors and handling:
 
 ## Tooling Notes
 - Runtime/language: Swift package (`swift-tools-version: 6.2`).
-- Supported platform declared in package: iOS 15+.
+- Swift language mode: `swiftLanguageModes: [.v6]` (Swift 6 strict concurrency mode).
+- Supported platforms declared in package: iOS 15+, macOS 12+.
 - Module name: `BissapAPIKit`.
 - Module style: SwiftPM library (ESM/CJS are not applicable).
+- Validation commands: `swift build` and `swift test`.
 
 ## Assumptions
-- The consumer project is an iOS 15+ Swift app or package.
+- The consumer project is an iOS 15+ or macOS 12+ Swift app/package.
 - Installation example uses local path dependency (`../BissapAPIKit`) because no canonical remote URL is defined in this repository.
 - The happy-path endpoint (`jsonplaceholder.typicode.com`) is reachable during execution.
