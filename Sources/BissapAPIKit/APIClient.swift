@@ -25,7 +25,9 @@ public enum APIClient {
     /// - Parameters:
     ///   - endpoint: Request definition containing URL, method, and optional payload.
     ///   - responseType: Expected decodable model type. Defaults to `T.self`.
-    ///   - accessToken: Optional bearer token sent as `Authorization: Bearer <token>`.
+    ///   - bearerToken: Optional bearer token sent as `Authorization: Bearer <token>`.
+    ///     The token format is intentionally opaque to the client: JWTs and opaque
+    ///     access tokens are both supported when your backend accepts them as bearer credentials.
     /// - Returns: A decoded value of type `T`.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
@@ -47,9 +49,9 @@ public enum APIClient {
     public static func request<T: Decodable>(
         _ endpoint: Endpoint,
         responseType: T.Type = T.self,
-        accessToken: String? = nil
+        bearerToken: String? = nil
     ) async throws -> T {
-        let request = try makeURLRequest(for: endpoint, accessToken: accessToken)
+        let request = try makeURLRequest(for: endpoint, bearerToken: bearerToken)
         let (data, response) = try await session.data(for: request)
         let validated = try validate(response: response, data: data, allowEmptyBody: false)
         return try decoder.decode(T.self, from: validated)
@@ -59,16 +61,18 @@ public enum APIClient {
     ///
     /// - Parameters:
     ///   - endpoint: Request definition containing URL, method, and optional payload.
-    ///   - accessToken: Optional bearer token sent as `Authorization: Bearer <token>`.
+    ///   - bearerToken: Optional bearer token sent as `Authorization: Bearer <token>`.
+    ///     The token format is intentionally opaque to the client: JWTs and opaque
+    ///     access tokens are both supported when your backend accepts them as bearer credentials.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
     ///   - `ServiceError.serverIssue` when status code is outside `200..<300`.
     ///   - `URLError` or other `URLSession` transport errors.
     public static func request(
         _ endpoint: Endpoint,
-        accessToken: String? = nil
+        bearerToken: String? = nil
     ) async throws {
-        let request = try makeURLRequest(for: endpoint, accessToken: accessToken)
+        let request = try makeURLRequest(for: endpoint, bearerToken: bearerToken)
         let (data, response) = try await session.data(for: request)
         _ = try validate(response: response, data: data, allowEmptyBody: true)
     }
@@ -78,7 +82,7 @@ public enum APIClient {
     /// Builds the final `URLRequest` from endpoint data and optional auth.
     ///
     /// - Note: For non-GET requests, payload is encoded as JSON by `Endpoint.bodyData`.
-    private static func makeURLRequest(for endpoint: Endpoint, accessToken: String?) throws -> URLRequest {
+    private static func makeURLRequest(for endpoint: Endpoint, bearerToken: String?) throws -> URLRequest {
         let finalURL = endpoint.resolvedURL
         let method = endpoint.method
 
@@ -86,8 +90,8 @@ public enum APIClient {
         req.httpMethod = method.rawValue
 
         // Apply auth
-        if let accessToken {
-            req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        if let bearerToken {
+            req.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
         }
 
         // Body (non-GET)

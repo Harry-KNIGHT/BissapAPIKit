@@ -9,7 +9,7 @@ Use this guide to execute `BissapAPIKit` requests deterministically and handle s
 - A full `URL` for every request.
 - An `HTTPMethod` (`get`, `post`, `delete`, `patch`, `put`).
 - Optional payload as `[String: Any?]` (query for `GET`, JSON body for non-`GET`).
-- Optional bearer token via `accessToken`.
+- Optional bearer token via `bearerToken`.
 - Outputs:
 - Typed decoded model for `request<T>`.
 - No return value for `request` (void overload) and `putToS3`.
@@ -44,7 +44,7 @@ let endpoint = APIClient.Endpoint.direct(
     method: .get,
     payload: nil
 )
-let accessToken: String? = nil
+let bearerToken: String? = nil
 ```
 
 ### Execute a single call
@@ -59,7 +59,7 @@ struct Todo: Decodable {
 let todo: Todo = try await APIClient.request(
     endpoint,
     responseType: Todo.self,
-    accessToken: accessToken
+    bearerToken: bearerToken
 )
 ```
 
@@ -86,13 +86,13 @@ Signature:
 public static func request<T: Decodable>(
     _ endpoint: Endpoint,
     responseType: T.Type = T.self,
-    accessToken: String? = nil
+    bearerToken: String? = nil
 ) async throws -> T
 ```
 Parameters:
 - `endpoint`: Request description (`URL`, method, optional payload).
 - `responseType`: Decodable target type.
-- `accessToken`: Optional bearer token (`Authorization: Bearer <token>`).
+- `bearerToken`: Optional bearer token (`Authorization: Bearer <token>`). The token can be a JWT or an opaque access token.
 Return type/shape:
 - Returns decoded instance of `T`.
 Errors and handling:
@@ -107,12 +107,12 @@ Signature:
 ```swift
 public static func request(
     _ endpoint: Endpoint,
-    accessToken: String? = nil
+    bearerToken: String? = nil
 ) async throws
 ```
 Parameters:
 - `endpoint`: Request description.
-- `accessToken`: Optional bearer token.
+- `bearerToken`: Optional bearer token.
 Return type/shape:
 - No return value.
 Errors and handling:
@@ -196,10 +196,10 @@ Errors and handling:
 ## Authentication & Configuration
 ### Env vars
 - None required by the library itself.
-- If your app stores secrets in env vars, read them in app code and pass them as `accessToken`.
+- If your app stores secrets in env vars, read them in app code and pass them as `bearerToken`.
 
 ### Programmatic configuration
-- Pass `accessToken` to add `Authorization: Bearer <token>`.
+- Pass `bearerToken` to add `Authorization: Bearer <token>`.
 - For non-`GET`, payload auto-encodes to JSON and defaults `Content-Type` to `application/json` if unset.
 - For `putToS3`, bytes are sent raw with inferred or explicit MIME type.
 

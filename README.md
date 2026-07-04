@@ -38,9 +38,9 @@ What you should see:
 - Your project builds without “No such module `BissapAPIKit`”.
 - `import BissapAPIKit` stops showing errors.
 
-## Step 2: Set your secret key (or config)
-Good news: this library does not force a secret key by itself.
-You only pass a token when your API needs login/auth.
+## Step 2: Set your bearer token (or config)
+Good news: this library does not force an auth token by itself.
+You only pass a bearer token when your API needs login/auth.
 
 Copy this config idea into your code:
 
@@ -49,7 +49,7 @@ import Foundation
 import BissapAPIKit
 
 // For public endpoints, nil is fine.
-let accessToken: String? = nil
+let bearerToken: String? = nil
 
 // Real URL for our tiny demo.
 let demoURL = URL(string: "https://jsonplaceholder.typicode.com/todos/1")!
@@ -57,7 +57,7 @@ let demoURL = URL(string: "https://jsonplaceholder.typicode.com/todos/1")!
 
 What you should see:
 - No crash when creating `demoURL`.
-- `accessToken` can stay `nil` for the demo.
+- `bearerToken` can stay `nil` for the demo.
 
 ## Step 3: Run your first tiny example
 Copy this Swift code:
@@ -107,9 +107,17 @@ Todo title: delectus aut autem
 ## Step 4: Next things you can do
 - Send a `POST` by changing `method: .post` and adding `payload`.
 - Add your own `Decodable` structs for your real API responses.
-- Pass `accessToken` when your API needs `Authorization: Bearer ...`.
-- Use `APIClient.request(_:, accessToken:)` (the no-return version) for endpoints with empty responses.
+- Pass `bearerToken` when your API needs `Authorization: Bearer ...`.
+- Use `APIClient.request(_:, bearerToken:)` (the no-return version) for endpoints with empty responses.
 - Upload bytes to S3 with `APIClient.putToS3(...)` when you have a presigned URL.
+
+## Technical TODO
+- [ ] Keep `bearerToken` as the HTTP auth parameter for any token sent as `Authorization: Bearer ...`, whether the value is a JWT or an opaque access token.
+- [ ] Define payment identity names before adding Stripe and Apple purchase flows. Use provider-specific names at provider boundaries, such as `appleAppAccountToken` for StoreKit and `stripeCustomerID` for Stripe, and keep app-level account identifiers separate.
+- [ ] Revisit `putToS3` when upload work resumes, especially signed header handling, MIME type defaults, and large-file memory usage.
+- [ ] Improve HTTP error reporting so callers can inspect status codes such as 401, 403, 404, 409, and 429 without relying on logs.
+- [ ] Redact or make private sensitive error logs before this package is used broadly.
+- [ ] Add behavior tests for auth headers, query encoding, JSON bodies, empty responses, non-2xx responses, and S3 upload headers.
 
 ## Troubleshooting
 If you see this, try this:
@@ -132,7 +140,7 @@ You only need an account for the API service you call.
 The API provider you call might charge money.
 
 ### Where do I put my key?
-Store your key in your app’s secure config, then pass it as `accessToken` in `APIClient.request(..., accessToken:)`.
+Store your token in your app’s secure config, then pass it as `bearerToken` in `APIClient.request(..., bearerToken:)`.
 
 ### How do I update?
 If your app uses Swift Package Manager, refresh dependencies in Xcode or run:
