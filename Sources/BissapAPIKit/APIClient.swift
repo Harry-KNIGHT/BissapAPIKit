@@ -16,7 +16,7 @@ public enum APIClient {
     private static let decoder = JSONDecoder()
 
     /// Logger used to capture server-side failure context.
-    private static let logger = Logger()
+    private static let logger = Logger(subsystem: "BissapAPIKit", category: "Networking")
 
     // MARK: - Public
 
@@ -31,7 +31,7 @@ public enum APIClient {
     /// - Returns: A decoded value of type `T`.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
-    ///   - `ServiceError.serverIssue` when status code is outside `200..<300`.
+    ///   - `ServiceError.httpError` when status code is outside `200..<300`.
     ///   - `ServiceError.emptyData` when the body is empty.
     ///   - `DecodingError` when JSON shape does not match `T`.
     ///   - `URLError` or other `URLSession` transport errors.
@@ -66,7 +66,7 @@ public enum APIClient {
     ///     access tokens are both supported when your backend accepts them as bearer credentials.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
-    ///   - `ServiceError.serverIssue` when status code is outside `200..<300`.
+    ///   - `ServiceError.httpError` when status code is outside `200..<300`.
     ///   - `URLError` or other `URLSession` transport errors.
     public static func request(
         _ endpoint: Endpoint,
@@ -115,7 +115,7 @@ public enum APIClient {
     /// - Returns: The original response data when validation succeeds.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` if response is not `HTTPURLResponse`.
-    ///   - `ServiceError.serverIssue` for any non-2xx status code.
+    ///   - `ServiceError.httpError` for any non-2xx status code.
     ///   - `ServiceError.emptyData` when `allowEmptyBody` is `false` and body is empty.
     private static func validate(
         response: URLResponse,
@@ -125,18 +125,19 @@ public enum APIClient {
     ) throws -> Data {
         guard let http = response as? HTTPURLResponse else { throw ServiceError.notAnHTTPResponse }
         guard (200..<300).contains(http.statusCode) else {
-            let errorText = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
+            let error = httpError(statusCode: http.statusCode, url: http.url, data: data)
             // Keep server context in logs so callers can quickly diagnose request failures.
             logger.error(
             """
             HTTP error status=\(http.statusCode),
             url=\(http.url?.absoluteString ?? "<unknown>"),
-            body=\(errorText, privacy: .public),
+            message=\(error.backendMessage ?? "<none>", privacy: .public),
+            body=\(error.responseBody ?? "<empty>", privacy: .public),
             headers=\(String(describing: http.allHeaderFields), privacy: .public),
             context=\(String(describing: context), privacy: .public)
             """
             )
-            throw ServiceError.serverIssue
+            throw error
         }
 
         if allowEmptyBody {
@@ -148,6 +149,112 @@ public enum APIClient {
         }
 
         return data
+    }
+
+    static func httpError(statusCode: Int, url: URL?, data: Data) -> ServiceError {
+        let body = responseBodyText(from: data)
+        let message = backendErrorMessage(from: data, body: body)
+            ?? fallbackHTTPMessage(for: statusCode)
+
+        return .httpError(
+            statusCode: statusCode,
+            message: message,
+            body: body,
+            url: url
+        )
+    }
+
+    private static func responseBodyText(from data: Data) -> String? {
+        guard !data.isEmpty else { return nil }
+        return String(data: data, encoding: .utf8) ?? "<non-utf8 body: \(data.count) bytes>"
+    }
+
+    private static func backendErrorMessage(from data: Data, body: String?) -> String? {
+        guard !data.isEmpty else { return nil }
+
+        if let json = try? JSONSerialization.jsonObject(with: data),
+           let message = extractBackendMessage(from: json) {
+            return message
+        }
+
+        return body?.trimmedNonEmpty
+    }
+
+    private static func fallbackHTTPMessage(for statusCode: Int) -> String {
+        let reason = HTTPURLResponse.localizedString(forStatusCode: statusCode)
+        return "HTTP \(statusCode) \(reason.capitalized)"
+    }
+
+    private static func extractBackendMessage(from json: Any) -> String? {
+        if let dictionary = json as? [String: Any] {
+            let knownKeys = [
+                "message",
+                "msg",
+                "detail",
+                "errormessage",
+                "error_description",
+                "errordescription",
+                "error",
+                "reason",
+                "title",
+                "description",
+                "errors",
+            ]
+
+            let valuesByLowercaseKey = dictionary.reduce(into: [String: Any]()) { values, element in
+                values[element.key.lowercased()] = element.value
+            }
+
+            for key in knownKeys {
+                if let message = valuesByLowercaseKey[key].flatMap(stringifyBackendMessage) {
+                    return message
+                }
+            }
+
+            for value in dictionary.values {
+                if let nested = value as? [String: Any],
+                   let message = extractBackendMessage(from: nested) {
+                    return message
+                }
+
+                if let array = value as? [Any],
+                   let message = extractBackendMessage(from: array) {
+                    return message
+                }
+            }
+
+            return nil
+        }
+
+        if let array = json as? [Any] {
+            let messages = array.compactMap(stringifyBackendMessage)
+            return messages.isEmpty ? nil : messages.joined(separator: ", ")
+        }
+
+        return stringifyBackendMessage(json)
+    }
+
+    private static func stringifyBackendMessage(_ value: Any) -> String? {
+        switch value {
+        case let string as String:
+            return string.trimmedNonEmpty
+        case let number as NSNumber:
+            return String(describing: number)
+        case let dictionary as [String: Any]:
+            return extractBackendMessage(from: dictionary)
+        case let array as [Any]:
+            let messages = array.compactMap(stringifyBackendMessage)
+            return messages.isEmpty ? nil : messages.joined(separator: ", ")
+        default:
+            return nil
+        }
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -162,7 +269,7 @@ extension APIClient {
     ///   - filename: Optional filename used to infer MIME type when `contentType` is absent.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
-    ///   - `ServiceError.serverIssue` when status code is outside `200..<300`.
+    ///   - `ServiceError.httpError` when status code is outside `200..<300`.
     ///   - `URLError` or other `URLSession` transport errors.
     /// - Note: Upload uses raw bytes (`upload(for:from:)`), not multipart form data.
     public static func putToS3(

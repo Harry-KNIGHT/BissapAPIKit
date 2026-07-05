@@ -115,7 +115,7 @@ Todo title: delectus aut autem
 - [ ] Keep `bearerToken` as the HTTP auth parameter for any token sent as `Authorization: Bearer ...`, whether the value is a JWT or an opaque access token.
 - [ ] Define payment identity names before adding Stripe and Apple purchase flows. Use provider-specific names at provider boundaries, such as `appleAppAccountToken` for StoreKit and `stripeCustomerID` for Stripe, and keep app-level account identifiers separate.
 - [ ] Revisit `putToS3` when upload work resumes, especially signed header handling, MIME type defaults, and large-file memory usage.
-- [ ] Improve HTTP error reporting so callers can inspect status codes such as 401, 403, 404, 409, and 429 without relying on logs.
+- [x] Improve HTTP error reporting so callers can inspect status codes such as 401, 403, 404, 409, and 429 without relying on logs.
 - [ ] Redact or make private sensitive error logs before this package is used broadly.
 - [ ] Add behavior tests for auth headers, query encoding, JSON bodies, empty responses, non-2xx responses, and S3 upload headers.
 
@@ -125,7 +125,8 @@ If you see this, try this:
 | If you see | Do this |
 |---|---|
 | `No such module 'BissapAPIKit'` | Check Step 1 dependency block and rebuild. |
-| `ServiceError.serverIssue` | The server returned a non-2xx status. Check URL, token, and payload. |
+| `ServiceError.httpError` | The server returned a non-2xx status. Read `backendMessage`, `statusCode`, `responseBody`, or `localizedDescription` for the real backend error. |
+| `ServiceError.serverIssue` | Legacy generic server failure. New non-2xx responses should use `ServiceError.httpError`. |
 | `ServiceError.emptyData` | You expected JSON but server sent empty body. Use the no-return `request` overload for empty responses. |
 | `DecodingError` | Your struct does not match the JSON keys/types. Update your `Decodable` model. |
 | `ServiceError.notAnHTTPResponse` | URL loading did not return a valid HTTP response. Verify URL and network setup. |

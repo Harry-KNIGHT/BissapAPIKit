@@ -97,7 +97,7 @@ Return type/shape:
 - Returns decoded instance of `T`.
 Errors and handling:
 - `ServiceError.notAnHTTPResponse` if response is not `HTTPURLResponse`.
-- `ServiceError.serverIssue` for non-2xx status.
+- `ServiceError.httpError` for non-2xx status, including status code, backend message, raw body, and URL.
 - `ServiceError.emptyData` if body is empty when decoding is required.
 - `DecodingError` if JSON shape does not match `T`.
 - `URLError` or other networking errors from `URLSession`.
@@ -138,7 +138,7 @@ Parameters:
 Return type/shape:
 - No return value; success means upload accepted by S3.
 Errors and handling:
-- `ServiceError.serverIssue` on non-2xx.
+- `ServiceError.httpError` on non-2xx, including S3 error body when present.
 - `ServiceError.notAnHTTPResponse` on malformed response.
 - `URLError`/transport failures.
 
@@ -181,13 +181,13 @@ public enum ServiceError: Error {
     case notAnHTTPResponse
     case ressourceDoesNotExists
     case serverIssue
+    case httpError(statusCode: Int, message: String, body: String?, url: URL?)
     case emptyData
-    case emptyURL
     case noPresignedURL
 }
 ```
 Parameters:
-- None.
+- `httpError`: includes the HTTP status code, extracted backend message, raw response body when available, and failing URL.
 Return type/shape:
 - Enum errors thrown by `APIClient` validation logic.
 Errors and handling:
@@ -214,7 +214,8 @@ Errors and handling:
 ## Common Failure Modes
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `ServiceError.serverIssue` | HTTP status outside 200-299 | Inspect server logs/response body; verify URL, auth, and payload. |
+| `ServiceError.httpError` | HTTP status outside 200-299 | Display/log `backendMessage` or `localizedDescription`; inspect `statusCode` and `responseBody` for diagnostics. |
+| `ServiceError.serverIssue` | Legacy generic server failure | Prefer handling `ServiceError.httpError` for new non-2xx responses. |
 | `ServiceError.emptyData` | Decodable request got an empty body | Use the void `request` overload for no-content endpoints, or fix server response body. |
 | `DecodingError` | Model does not match JSON | Update your `Decodable` model to match exact keys/types. |
 | Query parameters missing | `GET` payload contains unsupported value types | Restrict query payload values to `String`, `Int`, `Double`, or `Bool`. |
