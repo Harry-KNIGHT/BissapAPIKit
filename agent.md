@@ -9,7 +9,7 @@ Use this guide to execute `BissapAPIKit` requests deterministically and handle s
 - A full `URL` for every request.
 - An `HTTPMethod` (`get`, `post`, `delete`, `patch`, `put`).
 - Optional payload as `[String: Any?]` (query for `GET`, JSON body for non-`GET`).
-- Optional bearer token via `bearerToken`.
+- Optional bearer token via `bearerToken`, or custom headers on `Endpoint.direct`.
 - Outputs:
 - Typed decoded model for `request<T>`.
 - No return value for `request` (void overload) and `putToS3`.
@@ -42,7 +42,8 @@ import BissapAPIKit
 let endpoint = APIClient.Endpoint.direct(
     url: URL(string: "https://jsonplaceholder.typicode.com/todos/1")!,
     method: .get,
-    payload: nil
+    payload: nil,
+    headers: [:]
 )
 let bearerToken: String? = nil
 ```
@@ -146,16 +147,23 @@ Errors and handling:
 Signature:
 ```swift
 public enum Endpoint {
-    case direct(url: URL, method: HTTPMethod, payload: [String: Any?]? = nil)
+    case direct(
+        url: URL,
+        method: HTTPMethod,
+        payload: [String: Any?]? = nil,
+        headers: [String: String] = [:]
+    )
 }
 ```
 Parameters:
 - `url`: Absolute URL.
 - `method`: HTTP verb.
 - `payload`: Optional data map.
+- `headers`: Optional HTTP headers to apply to the request.
 Return type/shape:
 - `GET`: payload values (`String`, `Int`, `Double`, `Bool`) become query parameters.
 - Non-`GET`: payload is encoded as JSON body (nil values removed).
+- Headers are applied before `bearerToken`; passing `bearerToken` still overrides `Authorization`.
 Errors and handling:
 - Non-JSON-serializable non-`GET` payload values throw during request construction.
 
@@ -200,6 +208,7 @@ Errors and handling:
 
 ### Programmatic configuration
 - Pass `bearerToken` to add `Authorization: Bearer <token>`.
+- Pass `headers` to `Endpoint.direct(...)` for custom request headers such as `Authorization`.
 - For non-`GET`, payload auto-encodes to JSON and defaults `Content-Type` to `application/json` if unset.
 - For `putToS3`, bytes are sent raw with inferred or explicit MIME type.
 

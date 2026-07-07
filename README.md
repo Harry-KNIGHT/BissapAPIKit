@@ -106,6 +106,7 @@ Todo title: delectus aut autem
 
 ## Step 4: Next things you can do
 - Send a `POST` by changing `method: .post` and adding `payload`.
+- Send custom headers with `headers: ["Authorization": authorizationHeaderValue]` on `APIClient.Endpoint.direct(...)`.
 - Add your own `Decodable` structs for your real API responses.
 - Pass `bearerToken` when your API needs `Authorization: Bearer ...`.
 - Use `APIClient.request(_:, bearerToken:)` (the no-return version) for endpoints with empty responses.

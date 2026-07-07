@@ -28,6 +28,7 @@ public enum APIClient {
     ///   - bearerToken: Optional bearer token sent as `Authorization: Bearer <token>`.
     ///     The token format is intentionally opaque to the client: JWTs and opaque
     ///     access tokens are both supported when your backend accepts them as bearer credentials.
+    ///     When provided, this value overrides an endpoint `Authorization` header.
     /// - Returns: A decoded value of type `T`.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
@@ -64,6 +65,7 @@ public enum APIClient {
     ///   - bearerToken: Optional bearer token sent as `Authorization: Bearer <token>`.
     ///     The token format is intentionally opaque to the client: JWTs and opaque
     ///     access tokens are both supported when your backend accepts them as bearer credentials.
+    ///     When provided, this value overrides an endpoint `Authorization` header.
     /// - Throws:
     ///   - `ServiceError.notAnHTTPResponse` when the transport response is not HTTP.
     ///   - `ServiceError.httpError` when status code is outside `200..<300`.
@@ -82,12 +84,16 @@ public enum APIClient {
     /// Builds the final `URLRequest` from endpoint data and optional auth.
     ///
     /// - Note: For non-GET requests, payload is encoded as JSON by `Endpoint.bodyData`.
-    private static func makeURLRequest(for endpoint: Endpoint, bearerToken: String?) throws -> URLRequest {
+    static func makeURLRequest(for endpoint: Endpoint, bearerToken: String?) throws -> URLRequest {
         let finalURL = endpoint.resolvedURL
         let method = endpoint.method
 
         var req = URLRequest(url: finalURL)
         req.httpMethod = method.rawValue
+
+        for (field, value) in endpoint.headers {
+            req.setValue(value, forHTTPHeaderField: field)
+        }
 
         // Apply auth
         if let bearerToken {
