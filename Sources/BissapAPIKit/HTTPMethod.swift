@@ -1,5 +1,5 @@
 /// Supported HTTP verbs for `APIClient.Endpoint`.
-public enum HTTPMethod: String {
+public enum HTTPMethod: String, Sendable {
     /// Fetch data without requesting a mutation.
     case get = "GET"
     /// Create or submit data to a server resource.

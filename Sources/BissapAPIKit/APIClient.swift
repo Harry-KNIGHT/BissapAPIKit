@@ -47,7 +47,7 @@ public enum APIClient {
     ///
     ///   let user: User = try await APIClient.request(endpoint)
     ///   ```
-    public static func request<T: Decodable>(
+    public static func request<T: Decodable & Sendable>(
         _ endpoint: Endpoint,
         responseType: T.Type = T.self,
         bearerToken: String? = nil
